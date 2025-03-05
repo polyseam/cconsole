@@ -1,0 +1,15 @@
+{
+  "name": "@polyseam/cconsole",
+  "version": "1.0.0",
+  "description": "A simple filtered and colorful console logger for Deno",
+  "license": "Apache-2.0",
+  "exports": "./mod.ts",
+  "tasks": {
+    "checks": "deno check . && deno fmt --check && deno lint",
+    "test": "deno test"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.11",
+    "@std/testing": "jsr:@std/testing@^1.0.9"
+  }
+}

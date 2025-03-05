@@ -1,0 +1,25 @@
+name: Check and Test Module
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  test_and_lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: use deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.2.2
+
+      - name: Static Checks
+        run: deno task checks
+
+      - name: Test
+        run: deno task test

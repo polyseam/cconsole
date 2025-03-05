@@ -39,8 +39,11 @@ export class CConsole implements Console {
   private logLevel: number;
   private readonly oconsole: Console;
 
-  constructor(logLevel: LogLevel) {
+  constructor(uLogLevel: LogLevel) {
     this.oconsole = console;
+
+    const logLevel = uLogLevel?.toUpperCase() as LogLevel;
+
     if (!LOG_LEVELS[logLevel]) {
       this.logLevel = LOG_LEVELS.DEBUG;
       this.debug(

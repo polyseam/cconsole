@@ -1,6 +1,6 @@
 {
   "name": "@polyseam/cconsole",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A simple filtered and colorful console logger for Deno",
   "license": "Apache-2.0",
   "exports": "./mod.ts",

@@ -13,11 +13,82 @@ export type ConsoleDirOptions = {
   showHidden?: boolean;
 };
 
-export const COLOR_MAP: Record<LogLevel, string> = {
+type CConsolePaddingOptions = {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+};
+
+type CConsoleColorsOptions = null | {
+  LOG: null | string;
+  DEBUG: null | string;
+  INFO: null | string;
+  WARN: null | string;
+  ERROR: null | string;
+};
+
+export type CConsoleOptions = {
+  padding?: CConsolePaddingOptions;
+  colors?: CConsoleColorsOptions;
+  prefixes?: CConsolePrefixesOptions;
+};
+
+export type CConsolePrefixesOptions = null | {
+  LOG?: string;
+  DEBUG?: string;
+  INFO?: string;
+  WARN?: string;
+  ERROR?: string;
+};
+
+const SPACE = " ";
+const NEWLINE = "\n";
+
+const DEFAULT_PREFIXES: CConsolePrefixesOptions = {
+  LOG: "[LOG]",
+  DEBUG: "[DEBUG]",
+  INFO: "[INFO]",
+  WARN: "[WARN]",
+  ERROR: "[ERROR]",
+};
+
+const DEFAULT_COLORS: CConsoleColorsOptions = {
   DEBUG: "green",
   INFO: "blue",
   WARN: "yellow",
   ERROR: "red",
+  LOG: null,
+};
+
+const DEFAULT_PADDING: CConsolePaddingOptions = {
+  top: 0,
+  bottom: 0,
+  left: 0,
+  right: 0,
+};
+
+type CConsolePrefixes = {
+  LOG: string;
+  DEBUG: string;
+  INFO: string;
+  WARN: string;
+  ERROR: string;
+};
+
+type CConsoleColors = {
+  LOG: string | null;
+  DEBUG: string | null;
+  INFO: string | null;
+  WARN: string | null;
+  ERROR: string | null;
+};
+
+type CConsolePadding = {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
 };
 
 /**
@@ -38,9 +109,41 @@ export const COLOR_MAP: Record<LogLevel, string> = {
 export class CConsole implements Console {
   private logLevel: number;
   private readonly oconsole: Console;
+  padding: CConsolePadding;
+  colors: CConsoleColors;
+  prefixes: CConsolePrefixes;
 
-  constructor(uLogLevel: LogLevel) {
+  constructor(uLogLevel: LogLevel, options?: CConsoleOptions) {
     this.oconsole = console;
+
+    if (options?.prefixes === null) {
+      this.prefixes = {
+        LOG: "",
+        DEBUG: "",
+        INFO: "",
+        WARN: "",
+        ERROR: "",
+      } as CConsolePrefixes;
+    } else {
+      this.prefixes = DEFAULT_PREFIXES as CConsolePrefixes;
+      for (const [key, value] of Object.entries(options?.prefixes ?? {})) {
+        if (value === null) {
+          this.prefixes[key as keyof CConsolePrefixes] = "";
+        } else {
+          this.prefixes[key as keyof CConsolePrefixes] = value;
+        }
+      }
+    }
+
+    this.padding = {
+      ...DEFAULT_PADDING,
+      ...(options?.padding ?? {}),
+    } as CConsolePadding;
+
+    this.colors = {
+      ...DEFAULT_COLORS,
+      ...(options?.colors ?? {}),
+    } as CConsoleColors;
 
     const logLevel = uLogLevel?.toUpperCase() as LogLevel;
 
@@ -54,39 +157,102 @@ export class CConsole implements Console {
     }
   }
 
+  /**
+   * Returns a new CConsole instance with the specified padding
+   * @param padding Padding options to apply
+   * @returns A new CConsole instance with the specified padding
+   */
+  padded(
+    padding: Partial<CConsolePaddingOptions> = { top: 1, bottom: 1 },
+  ): CConsole {
+    const colors: CConsoleColors = this.colors;
+    const prefixes: CConsolePrefixes = this.prefixes;
+
+    // Convert numeric log level back to LogLevel string
+    const logLevel =
+      Object.entries(LOG_LEVELS).find(([_, v]) => v === this.logLevel)
+        ?.[0] as LogLevel || "DEBUG";
+
+    return new CConsole(logLevel, {
+      padding: { ...this.padding, ...padding },
+      prefixes,
+      colors,
+    });
+  }
+
   // Private helper to determine if a message with a given level should be logged.
   private shouldLog(level: number): boolean {
     return level >= this.logLevel;
   }
 
+  private getPrefix(level: LogLevel | "LOG"): string[] {
+    const prefix = this.prefixes ? this.prefixes[level] : null;
+    const out: string[] = [];
+
+    if (!prefix) {
+      // Don't add any padding or prefix if prefix is null
+      return out;
+    }
+
+    // Only add top/newline padding if there's actually a prefix to show
+    const top = NEWLINE.repeat(this.padding?.top ?? 0);
+    const left = SPACE.repeat(this.padding?.left ?? 0);
+
+    if (this.colors?.[level]) {
+      out.unshift(
+        `%c${top}${left}${prefix}`,
+        `color:${this.colors[level]}`,
+      );
+    } else if (prefix) { // Only add the prefix if it's not an empty string
+      out.unshift(`${top}${left}${prefix}`);
+    }
+
+    return out;
+  }
+
+  private getSuffix(): string[] {
+    const out: string[] = [];
+
+    if (this.padding?.right) {
+      out.push(SPACE.repeat(this.padding.right));
+    }
+
+    if (this.padding?.bottom) {
+      out.push(NEWLINE.repeat(this.padding.bottom));
+    }
+
+    return out;
+  }
+
   // Treat 'log' as equivalent to INFO.
   log(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.INFO)) return;
-    this.oconsole.log("[LOG]", ...args);
+    const out = [...this.getPrefix("LOG"), ...args, ...this.getSuffix()];
+    this.oconsole.log(...out);
   }
 
   debug(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.DEBUG)) return;
-    this.oconsole.debug(`%c[DEBUG]`, `color:${COLOR_MAP.DEBUG}`, ...args);
+    const out = [...this.getPrefix("DEBUG"), ...args, ...this.getSuffix()];
+    this.oconsole.debug(...out);
   }
 
   info(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.INFO)) return;
-    if (typeof this.oconsole.info === "function") {
-      this.oconsole.info(`%c[INFO]`, `color:${COLOR_MAP.INFO}`, ...args);
-    } else {
-      this.oconsole.log(`%c[INFO]`, `color:${COLOR_MAP.INFO}`, ...args);
-    }
+    const out = [...this.getPrefix("INFO"), ...args, ...this.getSuffix()];
+    this.oconsole.info(...out);
   }
 
   warn(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.WARN)) return;
-    this.oconsole.warn(`%c[WARN]`, `color:${COLOR_MAP.WARN}`, ...args);
+    const out = [...this.getPrefix("WARN"), ...args, ...this.getSuffix()];
+    this.oconsole.warn(...out);
   }
 
   error(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.ERROR)) return;
-    this.oconsole.error(`%c[ERROR]`, `color:${COLOR_MAP.ERROR}`, ...args);
+    const out = [...this.getPrefix("ERROR"), ...args, ...this.getSuffix()];
+    this.oconsole.error(...out);
   }
 
   dir(

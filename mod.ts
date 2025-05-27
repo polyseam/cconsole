@@ -13,12 +13,37 @@ export type ConsoleDirOptions = {
   showHidden?: boolean;
 };
 
-export const COLOR_MAP: Record<LogLevel, string> = {
-  DEBUG: "green",
-  INFO: "blue",
-  WARN: "yellow",
-  ERROR: "red",
+type CConsolePaddingOptions = {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
 };
+
+type CConsoleColorsOptions = null | {
+  LOG: null | string;
+  DEBUG: null | string;
+  INFO: null | string;
+  WARN: null | string;
+  ERROR: null | string;
+};
+
+export type CConsoleOptions = {
+  padding: CConsolePaddingOptions;
+  colors: CConsoleColorsOptions;
+  prefixes: CConsolePrefixesOptions;
+};
+
+export type CConsolePrefixesOptions = {
+  LOG: string;
+  DEBUG: string;
+  INFO: string;
+  WARN: string;
+  ERROR: string;
+};
+
+const SPACE = " ";
+const NEWLINE = "\n";
 
 /**
  * Overrides console with colors and filtering based on log level.
@@ -38,9 +63,36 @@ export const COLOR_MAP: Record<LogLevel, string> = {
 export class CConsole implements Console {
   private logLevel: number;
   private readonly oconsole: Console;
+  padding: CConsolePaddingOptions;
+  colors: CConsoleColorsOptions;
+  prefixes: CConsolePrefixesOptions;
 
-  constructor(uLogLevel: LogLevel) {
+  constructor(uLogLevel: LogLevel, options: CConsoleOptions = {
+    padding: {
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    },
+    colors: {
+      LOG: null, // base color, still visible
+      DEBUG: "green",
+      INFO: "blue",
+      WARN: "yellow",
+      ERROR: "red",
+    },
+    prefixes: {
+      LOG: "[LOG]",
+      DEBUG: "[DEBUG]",
+      INFO: "[INFO]",
+      WARN: "[WARN]",
+      ERROR: "[ERROR]",
+    },
+  }) {
     this.oconsole = console;
+    this.padding = options.padding;
+    this.colors = options.colors;
+    this.prefixes = options.prefixes;
 
     const logLevel = uLogLevel?.toUpperCase() as LogLevel;
 
@@ -59,34 +111,75 @@ export class CConsole implements Console {
     return level >= this.logLevel;
   }
 
+  private getPrefix(level: LogLevel | "LOG"): string[] {
+
+    const prefix = this.prefixes[level];
+    const out: string[] = [];
+
+    if (prefix === null) {
+      return out;
+    }
+
+    if(this.colors?.[level]) {
+      out.push(`%c${prefix}`, `color:${this.colors[level]}`);
+    } else {
+      out.push(prefix);
+    }
+
+    if (this.padding?.top) {
+      out.unshift(NEWLINE.repeat(this.padding.top));
+    }
+
+    if (this.padding?.left) {
+      out.unshift(SPACE.repeat(this.padding.left));
+    }
+
+    return out;
+  }
+
+  private getSuffix(): string[] {
+    const out: string[] = [];
+
+    if (this.padding?.right) {
+      out.push(SPACE.repeat(this.padding.right));
+    }
+
+    if (this.padding?.bottom) {
+      out.push(NEWLINE.repeat(this.padding.bottom));
+    }
+
+    return out;
+  }
+
   // Treat 'log' as equivalent to INFO.
   log(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.INFO)) return;
-    this.oconsole.log("[LOG]", ...args);
+    const out = [...this.getPrefix("LOG"), ...args, ...this.getSuffix()];
+    this.oconsole.log(...out);
   }
 
   debug(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.DEBUG)) return;
-    this.oconsole.debug(`%c[DEBUG]`, `color:${COLOR_MAP.DEBUG}`, ...args);
+    const out = [...this.getPrefix("DEBUG"), ...args, ...this.getSuffix()];
+    this.oconsole.debug(...out);
   }
 
   info(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.INFO)) return;
-    if (typeof this.oconsole.info === "function") {
-      this.oconsole.info(`%c[INFO]`, `color:${COLOR_MAP.INFO}`, ...args);
-    } else {
-      this.oconsole.log(`%c[INFO]`, `color:${COLOR_MAP.INFO}`, ...args);
-    }
+    const out = [...this.getPrefix("INFO"), ...args, ...this.getSuffix()];
+    this.oconsole.info(...out);
   }
 
   warn(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.WARN)) return;
-    this.oconsole.warn(`%c[WARN]`, `color:${COLOR_MAP.WARN}`, ...args);
+    const out = [...this.getPrefix("WARN"), ...args, ...this.getSuffix()];
+    this.oconsole.warn(...out);
   }
 
   error(...args: unknown[]): void {
     if (!this.shouldLog(LOG_LEVELS.ERROR)) return;
-    this.oconsole.error(`%c[ERROR]`, `color:${COLOR_MAP.ERROR}`, ...args);
+    const out = [...this.getPrefix("ERROR"), ...args, ...this.getSuffix()];
+    this.oconsole.error(...out);
   }
 
   dir(

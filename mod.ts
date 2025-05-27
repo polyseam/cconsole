@@ -29,12 +29,46 @@ type CConsoleColorsOptions = null | {
 };
 
 export type CConsoleOptions = {
-  padding: CConsolePaddingOptions;
-  colors: CConsoleColorsOptions;
-  prefixes: CConsolePrefixesOptions;
+  padding?: CConsolePaddingOptions;
+  colors?: CConsoleColorsOptions;
+  prefixes?: CConsolePrefixesOptions;
 };
 
-export type CConsolePrefixesOptions = {
+export type CConsolePrefixesOptions = null | {
+  LOG?: string;
+  DEBUG?: string;
+  INFO?: string;
+  WARN?: string;
+  ERROR?: string;
+};
+
+const SPACE = " ";
+const NEWLINE = "\n";
+
+const DEFAULT_PREFIXES: CConsolePrefixesOptions = {
+  LOG: "[LOG]",
+  DEBUG: "[DEBUG]",
+  INFO: "[INFO]",
+  WARN: "[WARN]",
+  ERROR: "[ERROR]",
+};
+
+const DEFAULT_COLORS: CConsoleColorsOptions = {
+  DEBUG: "green",
+  INFO: "blue",
+  WARN: "yellow",
+  ERROR: "red",
+  LOG: null,
+};
+
+const DEFAULT_PADDING: CConsolePaddingOptions = {
+  top: 0,
+  bottom: 0,
+  left: 0,
+  right: 0,
+};
+
+type CConsolePrefixes = {
   LOG: string;
   DEBUG: string;
   INFO: string;
@@ -42,8 +76,20 @@ export type CConsolePrefixesOptions = {
   ERROR: string;
 };
 
-const SPACE = " ";
-const NEWLINE = "\n";
+type CConsoleColors = {
+  LOG: string | null;
+  DEBUG: string | null;
+  INFO: string | null;
+  WARN: string | null;
+  ERROR: string | null;
+};
+
+type CConsolePadding = {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+};
 
 /**
  * Overrides console with colors and filtering based on log level.
@@ -63,36 +109,41 @@ const NEWLINE = "\n";
 export class CConsole implements Console {
   private logLevel: number;
   private readonly oconsole: Console;
-  padding: CConsolePaddingOptions;
-  colors: CConsoleColorsOptions;
-  prefixes: CConsolePrefixesOptions;
+  padding: CConsolePadding;
+  colors: CConsoleColors;
+  prefixes: CConsolePrefixes;
 
-  constructor(uLogLevel: LogLevel, options: CConsoleOptions = {
-    padding: {
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
-    },
-    colors: {
-      LOG: null, // base color, still visible
-      DEBUG: "green",
-      INFO: "blue",
-      WARN: "yellow",
-      ERROR: "red",
-    },
-    prefixes: {
-      LOG: "[LOG]",
-      DEBUG: "[DEBUG]",
-      INFO: "[INFO]",
-      WARN: "[WARN]",
-      ERROR: "[ERROR]",
-    },
-  }) {
+  constructor(uLogLevel: LogLevel, options?: CConsoleOptions) {
     this.oconsole = console;
-    this.padding = options.padding;
-    this.colors = options.colors;
-    this.prefixes = options.prefixes;
+
+    if (options?.prefixes === null) {
+      this.prefixes = {
+        LOG: "",
+        DEBUG: "",
+        INFO: "",
+        WARN: "",
+        ERROR: "",
+      } as CConsolePrefixes;
+    } else {
+      this.prefixes = DEFAULT_PREFIXES as CConsolePrefixes;
+      for (const [key, value] of Object.entries(options?.prefixes ?? {})) {
+        if (value === null) {
+          this.prefixes[key as keyof CConsolePrefixes] = "";
+        } else {
+          this.prefixes[key as keyof CConsolePrefixes] = value;
+        }
+      }
+    }
+
+    this.padding = {
+      ...DEFAULT_PADDING,
+      ...(options?.padding ?? {}),
+    } as CConsolePadding;
+
+    this.colors = {
+      ...DEFAULT_COLORS,
+      ...(options?.colors ?? {}),
+    } as CConsoleColors;
 
     const logLevel = uLogLevel?.toUpperCase() as LogLevel;
 
@@ -106,32 +157,54 @@ export class CConsole implements Console {
     }
   }
 
+  /**
+   * Returns a new CConsole instance with the specified padding
+   * @param padding Padding options to apply
+   * @returns A new CConsole instance with the specified padding
+   */
+  padded(
+    padding: Partial<CConsolePaddingOptions> = { top: 1, bottom: 1 },
+  ): CConsole {
+    const colors: CConsoleColors = this.colors;
+    const prefixes: CConsolePrefixes = this.prefixes;
+
+    // Convert numeric log level back to LogLevel string
+    const logLevel =
+      Object.entries(LOG_LEVELS).find(([_, v]) => v === this.logLevel)
+        ?.[0] as LogLevel || "DEBUG";
+
+    return new CConsole(logLevel, {
+      padding: { ...this.padding, ...padding },
+      prefixes,
+      colors,
+    });
+  }
+
   // Private helper to determine if a message with a given level should be logged.
   private shouldLog(level: number): boolean {
     return level >= this.logLevel;
   }
 
   private getPrefix(level: LogLevel | "LOG"): string[] {
-
-    const prefix = this.prefixes[level];
+    const prefix = this.prefixes ? this.prefixes[level] : null;
     const out: string[] = [];
 
-    if (prefix === null) {
+    if (!prefix) {
+      // Don't add any padding or prefix if prefix is null
       return out;
     }
 
-    if(this.colors?.[level]) {
-      out.push(`%c${prefix}`, `color:${this.colors[level]}`);
-    } else {
-      out.push(prefix);
-    }
+    // Only add top/newline padding if there's actually a prefix to show
+    const top = NEWLINE.repeat(this.padding?.top ?? 0);
+    const left = SPACE.repeat(this.padding?.left ?? 0);
 
-    if (this.padding?.top) {
-      out.unshift(NEWLINE.repeat(this.padding.top));
-    }
-
-    if (this.padding?.left) {
-      out.unshift(SPACE.repeat(this.padding.left));
+    if (this.colors?.[level]) {
+      out.unshift(
+        `%c${top}${left}${prefix}`,
+        `color:${this.colors[level]}`,
+      );
+    } else if (prefix) { // Only add the prefix if it's not an empty string
+      out.unshift(`${top}${left}${prefix}`);
     }
 
     return out;

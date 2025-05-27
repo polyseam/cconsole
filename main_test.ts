@@ -148,3 +148,43 @@ Deno.test("CConsole defaults to DEBUG for invalid log level", () => {
     assertEquals(fake.debugs.length, 2 + DEBUG_CALL_FROM_CONSTRUCTOR);
   });
 });
+
+Deno.test("CConsole padded() pads top and bottom", () => {
+  withFakeConsole((fake) => {
+    const cconsole = new CConsole("INFO");
+    cconsole.padded().info("test");
+
+    assert(fake.infos.length >= 1);
+
+    const [firstArg, secondArg, thirdArg, fourthArg] = fake.infos[0] as [
+      string,
+      string,
+      string,
+      string,
+    ];
+
+    assert(firstArg.includes("\n[INFO]"));
+    assertStringIncludes(secondArg, "color:");
+    assertStringIncludes(thirdArg, "test");
+    assertStringIncludes(fourthArg, "\n");
+  });
+});
+
+Deno.test("CConsole padded({ left: 1 }) pads left", () => {
+  withFakeConsole((fake) => {
+    const cconsole = new CConsole("INFO");
+    cconsole.padded({ left: 1 }).info("test");
+
+    assert(fake.infos.length >= 1);
+
+    const [firstArg, secondArg, thirdArg] = fake.infos[0] as [
+      string,
+      string,
+      string,
+    ];
+
+    assert(firstArg.includes(" [INFO]"));
+    assertStringIncludes(secondArg, "color:");
+    assertStringIncludes(thirdArg, "test");
+  });
+});
